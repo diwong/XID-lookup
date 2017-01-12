@@ -12,13 +12,12 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import spray.json.DefaultJsonProtocol
-
 import scala.io.StdIn
-//import java.util.UUID
-
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 
-//class EntryRecord(val tenant: String, val SSId:  String, val XId: UUID, val Id: UUID)
+import akka.http.scaladsl.settings.ServerSettings
+import scala.concurrent.duration._
+
 
 case class CreateRequest(tenant: String, SSId: String, Id: String)
 case class FindIdRequest(tenant: String, XId: String)
@@ -121,12 +120,20 @@ object MyService extends App with Service {
   override implicit val materializer = ActorMaterializer()
 
   override val config = ConfigFactory.load()
+
+  val initialSettings = ServerSettings(system)
+  //TODO - following line results in type mismatch compiler error
+  //val requestTimeout = config.getDuration("http.requestTimeout"))
+  val requestTimeout = Duration(config.getString("http.requestTimeout"))
+  val serverSettings = initialSettings.withTimeouts(initialSettings.timeouts.withRequestTimeout(requestTimeout))
+  println(s"request timeout config: " + requestTimeout)
+
   val host = config.getString("http.interface")
   val port = config.getInt("http.port")
   override val logger = Logging(system, getClass)
 
   //Startup and listen for requests
-  val bindingFuture = Http().bindAndHandle(routes, host, port)
+  val bindingFuture = Http().bindAndHandle(routes, host, port, settings = serverSettings)
   println(s"Waiting for requests at http://$host:$port/...\nHit RETURN to terminate")
   StdIn.readLine()
 
